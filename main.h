@@ -1,24 +1,30 @@
-#include "main.h"
+#include <cstddef>
+#include <utility>
 
-bool BLACK = false, RED = true;
+enum Color {BLACK, RED};
 
-template<class T>
+template<class ValueType>
 class Set {
 public:
     struct Node {
-        T val;
-        bool color = RED;  // 0 means BLACK, 1 - RED
-        Node *left = nullptr, *right = nullptr, *parent = nullptr;
+        ValueType value;
+        Color color = RED;
+        Node *left = nullptr;
+        Node *right = nullptr;
+        Node *parent = nullptr;
         ~Node() {}
     };
+
     Set() {
         none = new Node;
-        none->left = none->right = none->parent = none;
+        none->left = none;
+        none->right = none;
+        none->parent = none;
         root = none;
     }
 
-    template<typename Iterator>
-    Set(Iterator first, Iterator last) {
+    template<typename iterator>
+    Set(iterator first, iterator last) {
         none = new Node;
         none->left = none->right = none->parent = none;
         root = none;
@@ -28,11 +34,11 @@ public:
         }
     }
 
-    Set(std::initializer_list<T> elems) {
+    Set(std::initializer_list<ValueType> elems) {
         none = new Node;
         none->left = none->right = none->parent = none;
         root = none;
-        for (auto& elem : elems) {
+        for (const auto& elem : elems) {
             insert(elem);
         }
     }
@@ -43,7 +49,8 @@ public:
         root = deep_copy(other.root);
         my_size = other.my_size;
     }
-    Set& operator=(const Set&other) {
+
+    Set& operator=(const Set& other) {
         if (this == &other) {
             return *this;
         }
@@ -69,28 +76,28 @@ public:
         delete none;
     }
 
-    void insert(const T& elem) {
+    void insert(const ValueType& elem) {
         Node* insert_elem = new Node{elem, RED, none, none, none};
-        my_size++;
+        ++my_size;
         if (empty()) {
             root = insert_elem;
         } else {
             Node* now = root, *parent = none;
             while (now != none) {
                 parent = now;
-                if (!(now->val < elem) && !(elem < now->val)) {
-                    my_size--;
+                if (!(now->value < elem) && !(elem < now->value)) {
+                    --my_size;
                     delete insert_elem;
                     return;
                 }
-                if (now->val < elem) {
+                if (now->value < elem) {
                     now = now->right;
                 } else {
                     now = now->left;
                 }
             }
             insert_elem->parent = parent;
-            if (parent->val < elem) {
+            if (parent->value < elem) {
                 parent->right = insert_elem;
             } else {
                 parent->left = insert_elem;
@@ -99,12 +106,12 @@ public:
         fix_insert(insert_elem);
     }
 
-    void erase(const T& elem) {
+    void erase(const ValueType& elem) {
         Node* node = find_node(elem);
         if (node != none) {
-            my_size--;
+            --my_size;
         }
-        deleteNode(node);
+        delete_node(node);
     }
 
     struct iterator {
@@ -116,12 +123,9 @@ public:
             node = none = root = nullptr;
         }
 
-        iterator(Node* a, Node* tree_none, Node* tree_root) {
-            node = a;
-            none = tree_none;
-            root = tree_root;
-        }
-        Node* get_next_elem(Node* node, Node* none) const {
+        iterator(Node* a, Node* tree_none, Node* tree_root): node(a), none(tree_none), root(tree_root) {}
+
+        Node* get_next_element(Node* node, Node* none) const {
             if (node->right != none) {
                 node = node->right;
                 while (node->left != none) {
@@ -143,7 +147,7 @@ public:
             }
         }
 
-        Node* get_previous(Node* node, Node* none, Node* root) const {
+        Node* get_previous_element(Node* node, Node* none, Node* root) const {
             if (node == none) {
                 node = root;
                 while (node->right != none) {
@@ -173,41 +177,46 @@ public:
         }
 
         iterator operator++() {
-            node = get_next_elem(node, none);
+            node = get_next_element(node, none);
             return iterator(node, none, root);
         }
 
         iterator operator++(int) {
             Node* last = node;
-            node = get_next_elem(node, none);
+            node = get_next_element(node, none);
             return iterator(last, none, root);
         }
+
         iterator operator--() {
-            node = get_previous(node, none, root);
+            node = get_previous_element(node, none, root);
             return iterator(node, none, root);
         }
+
         iterator operator--(int) {
             Node* last = node;
-            node = get_previous(node, none, root);
+            node = get_previous_element(node, none, root);
             return iterator(last, none, node);
         }
 
         bool operator==(const iterator& other) const {
             return (this->node == other.node && this->root == other.root);
         }
-        T operator*() const {
-            return node->val;
+
+        ValueType operator*() const {
+            return node->value;
         }
-        T* operator->() const {
-            return &node->val;
+
+        ValueType* operator->() const {
+            return &node->value;
         }
+
         bool operator!=(const iterator& other)const {
             return (this->node != other.node || this->root != other.root);
         }
     };
 
     iterator begin() const {
-        Node * now = root;
+        Node* now = root;
         while (now->left != none) {
             now = now->left;
         }
@@ -218,17 +227,19 @@ public:
         return iterator(none, none, root);
     }
 
-    iterator find(const T& elem) const {
+    iterator find(const ValueType& elem) const {
         return iterator(find_node(elem), none, root);
     }
 
-    iterator lower_bound(const T& elem) const {
+    iterator lower_bound(const ValueType& elem) const {
         return iterator(lower_bound_node(elem), none, root);
     }
-    size_t contains(const T& elem) {
+
+    size_t contains(const ValueType& elem) {
         return find(elem) != end();
     }
-    void add(const T &elem) {
+
+    void add(const ValueType &elem) {
         insert(elem);
     }
 private:
@@ -240,33 +251,16 @@ private:
         return x->parent && x->parent->left == x;
     }
 
-    Node* find_node(const T& elem) const {
-        if (empty()) {
-            return none;
-        }
-        Node* now = root;
-        while (now != none) {
-            if (now->val < elem) {
-                now = now->right;
-            } else if (!(now->val < elem) && !(elem < now->val)) {
-                break;
-            } else {
-                now = now->left;
-            }
-        }
-        return now;
-    }
-
-    Node* lower_bound_node(const T& elem) const  {
+    Node* lower_bound_node(const ValueType& elem) const  {
         if (empty()) {
             return none;
         }
         Node* now = root;
         Node* last = none;
         while (now != none) {
-            if (now->val < elem) {
+            if (now->value < elem) {
                 now = now->right;
-            } else if (!(now->val < elem) && !(elem < now->val)) {
+            } else if (!(now->value < elem) && !(elem < now->value)) {
                 break;
             } else {
                 last = now;
@@ -277,6 +271,14 @@ private:
             return last;
         }
         return now;
+    }
+
+    Node* find_node(const ValueType& elem) const {
+        Node* node = lower_bound_node(elem);
+        if ((node->value < elem) || (elem < node->value)){
+            return none;
+        }
+        return node;
     }
 
     void left_rotate(Node* x) {
@@ -421,7 +423,7 @@ private:
         node->color = BLACK;
     }
 
-    void deleteNode(Node *node) {
+    void delete_node(Node *node) {
         if (!node || node == none) {
             return;
         }
@@ -450,7 +452,7 @@ private:
             root = x;
         }
         if (y != node) {
-            node->val = y->val;
+            node->value = y->value;
         }
         if (y->color == BLACK) {
             fix_delete(x);
@@ -468,11 +470,12 @@ private:
         erase_all(node->right);
         delete node;
     };
+
     Node* deep_copy(Node* now) {
         if (now->left == now) {
             return none;
         }
-        Node* next = new Node{now->val, now->color, none, none, none};
+        Node* next = new Node{now->value, now->color, none, none, none};
         Node* left = deep_copy(now->left);
         Node* right = deep_copy(now->right);
         if (left != none) {
